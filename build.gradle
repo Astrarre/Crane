@@ -1,6 +1,12 @@
+buildscript {
+    dependencies {
+        classpath "io.github.febb:BuildMetaUtils:1.0-SNAPSHOT"
+    }
+}
 plugins {
     id("org.jetbrains.kotlin.jvm") version "1.3.72"
 }
+
 
 
 
@@ -20,6 +26,8 @@ dependencies {
     testRuntime('org.junit.jupiter:junit-jupiter-engine:5.4.2')
 
     implementation 'com.squareup:javapoet:1.12.1'
+
+    implementation("io.github.febb:MetaUtils:1.0-SNAPSHOT")
 }
 
 compileKotlin {
@@ -35,4 +43,15 @@ test {
     maxHeapSize = '1G'
 }
 
-apply plugin: SetupTesting
+apply plugin: MetaUtils
+
+metaUtils {
+    def v1 = createJarTest("testV1")
+    def v2 = createJarTest("testV2")
+    def mcV1 = createJarTest("testMcV1")
+    def mcV2 = createJarTest("testMcV2")
+
+    v1.compileClasspath += mcV1.output
+    v2.compileClasspath += mcV2.output
+}
+
