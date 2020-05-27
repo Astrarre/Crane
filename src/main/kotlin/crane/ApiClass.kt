@@ -1,13 +1,13 @@
 package crane
 
-import crane.codegeneration.Visibility
-import crane.descriptor.Descriptor
-import crane.descriptor.FieldDescriptor
-import crane.descriptor.MethodDescriptor
+import codegeneration.Visibility
+import descriptor.Descriptor
+import descriptor.FieldDescriptor
+import descriptor.MethodDescriptor
 
 
 /**
- * ApiClass use dot.separated.format for the packageName always!
+ * [ApiClass]es use dot.separated.format for the packageName always!
  */
 data class ApiClass(
     val packageName: String,
@@ -17,10 +17,6 @@ data class ApiClass(
     val fields: Set<Field>,
     val innerClasses: Set<ApiClass>
 ) {
-    companion object {
-//        val None = ApiClass("", "", Type.Interface, setOf(), setOf(), setOf())
-    }
-
     val fullyQualifiedName get() = "$packageName.$className"
 
     enum class Type {

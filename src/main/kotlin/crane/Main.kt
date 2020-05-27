@@ -1,11 +1,19 @@
 package crane
 
-import crane.codegeneration.JavaCodeGenerator
-import crane.codegeneration.JavaGeneratedClass
-import crane.codegeneration.JavaGeneratedMethod
-import crane.codegeneration.Visibility
-import crane.descriptor.*
+import asm.isInterface
+import asm.isStatic
+import asm.visibility
+import codegeneration.JavaCodeGenerator
+import codegeneration.JavaGeneratedClass
+import codegeneration.JavaGeneratedMethod
+import codegeneration.Visibility
+import descriptor.*
+import exists
+import isDirectory
+import openJar
 import org.objectweb.asm.tree.MethodNode
+import readToClassNode
+import walk
 import java.nio.file.Path
 import java.nio.file.Paths
 
