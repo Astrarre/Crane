@@ -1,6 +1,7 @@
 
 import crane.buildBridge
 import org.junit.jupiter.api.Test
+import testing.getResource
 import kotlin.test.assertEquals
 
 class TestJars {

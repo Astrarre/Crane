@@ -11,8 +11,5 @@ import java.util.*
 import java.util.jar.JarEntry
 import java.util.jar.JarFile
 
-fun getResource(path: String) = Paths.get(
-    TestJars::class.java
-        .classLoader.getResource("dummyResource")!!.toURI()
-).parent.resolve(path)
+
 

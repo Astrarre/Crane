@@ -1,5 +1,6 @@
 package crane
 
+import api.*
 import asm.isInterface
 import asm.isStatic
 import asm.visibility
@@ -35,8 +36,8 @@ fun buildBridge(old: Path, new: Path, dest: Path, newVersion: String) {
                     )
                     val newPath = newFs.getPath(matchingPath.toString())
                     assert(oldPath.exists())
-                    val oldApi = parseApi(oldPath)
-                    val newApi = if (newPath.exists()) parseApi(newPath) else null
+                    val oldApi = ApiClass.readFrom(oldPath)
+                    val newApi = if (newPath.exists()) ApiClass.readFrom(newPath) else null
                     buildApiBridge(oldApi, newApi, destination = dest)
                 }
 
@@ -53,38 +54,7 @@ fun main() {
 
 private val MethodNode.paramsSafe get() = parameters ?: listOf()
 
-private fun parseApi(classPath: Path): ApiClass {
-    val classNode = readToClassNode(classPath)
-    val methods = classNode.methods.map { method ->
-        val descriptor = MethodDescriptor.read(method.desc)
-        val nonThisLocals = method.localVariables.filter { it.name != "this" }
-        check(nonThisLocals.size >= descriptor.parameterDescriptors.size) {
-            "There was not enough (${method.localVariables.size}) local variable debug information for all parameters" +
-                    " (${descriptor.parameterDescriptors.size} of them) in method ${method.name}"
-        }
 
-        ApiClass.Method(
-            name = method.name, descriptor = descriptor, static = method.isStatic,
-            parameterNames = nonThisLocals.take(descriptor.parameterDescriptors.size).map { it.name },
-            visibility = method.visibility
-        )
-    }
-    val fields = classNode.fields.map {
-        ApiClass.Field(it.name, FieldDescriptor.read(it.desc), it.isStatic, it.visibility)
-    }
-
-    val fullClassName = classNode.name
-    val packageSplit = fullClassName.lastIndexOf("/")
-    val packageName = fullClassName.substring(0, packageSplit).replace("/", ".")
-    val className = fullClassName.substring(packageSplit + 1, fullClassName.length)
-
-    //TODO inner classes
-    return ApiClass(
-        packageName = packageName, className = className, methods = methods.toSet(), fields = fields.toSet(),
-        innerClasses = setOf(),
-        type = if (classNode.isInterface) ApiClass.Type.Interface else ApiClass.Type.Baseclass
-    )
-}
 
 private fun buildApiBridge(old: ApiClass, new: ApiClass?, destination: Path) {
     assert(new == null || old.type == new.type)
