@@ -1,22 +1,15 @@
 package crane
 
 import api.*
-import asm.isInterface
-import asm.isStatic
-import asm.visibility
 import codegeneration.JavaCodeGenerator
 import codegeneration.JavaGeneratedClass
 import codegeneration.JavaGeneratedMethod
 import codegeneration.Visibility
-import descriptor.*
+import descriptor.ObjectType
+import descriptor.ReturnDescriptor
 import exists
 import isDirectory
-import openJar
-import org.objectweb.asm.tree.MethodNode
-import readToClassNode
-import walk
 import java.nio.file.Path
-import java.nio.file.Paths
 
 fun buildBridge(old: Path, new: Path, dest: Path, newVersion: String) {
     require(dest.parent.exists()) { "The chosen destination path '$dest' is not in any existing directory." }
@@ -24,26 +17,12 @@ fun buildBridge(old: Path, new: Path, dest: Path, newVersion: String) {
 
     dest.toFile().deleteRecursively()
 
-    old.openJar { oldFs ->
-        new.openJar { newFs ->
-            oldFs.getPath("/").walk { oldPath ->
-                if (oldPath.toString() == "/") return@walk
+    val newClassesByName = ClassApi.readFromJar(new).map { it.fullyQualifiedName to it }.toMap()
+    for (oldClass in ClassApi.readFromJar(old)) {
+        val newClassName = "$newVersion." + oldClass.fullyQualifiedName.substringAfter(".")
+        val newClass = newClassesByName[newClassName]
 
-                if (oldPath.toString().endsWith(".class")) {
-                    // Get the path of the same class in the new api version
-                    val matchingPath = Paths.get(newVersion).resolve(
-                        oldPath.toString().removePrefix("/").let { it.substring(it.indexOf("/") + 1) }
-                    )
-                    val newPath = newFs.getPath(matchingPath.toString())
-                    assert(oldPath.exists())
-                    val oldApi = ApiClass.readFrom(oldPath)
-                    val newApi = if (newPath.exists()) ApiClass.readFrom(newPath) else null
-                    buildApiBridge(oldApi, newApi, destination = dest)
-                }
-
-
-            }
-        }
+        buildApiBridge(oldClass, newClass, dest)
     }
 
 }
@@ -52,11 +31,9 @@ fun main() {
     val x = 2
 }
 
-private val MethodNode.paramsSafe get() = parameters ?: listOf()
+val ClassApi.isBaseclass get() = type == ClassApi.Type.AbstractClass
 
-
-
-private fun buildApiBridge(old: ApiClass, new: ApiClass?, destination: Path) {
+private fun buildApiBridge(old: ClassApi, new: ClassApi?, destination: Path) {
     assert(new == null || old.type == new.type)
     JavaCodeGenerator.writeClass(
         old.packageName,
@@ -69,14 +46,14 @@ private fun buildApiBridge(old: ApiClass, new: ApiClass?, destination: Path) {
     }
 }
 
-private fun JavaGeneratedClass.buildBridgeClass(oldClass: ApiClass, newClass: ApiClass?) {
+private fun JavaGeneratedClass.buildBridgeClass(oldClass: ClassApi, newClass: ClassApi?) {
     if (oldClass.isBaseclass && newClass != null) {
         setSuperclass(ObjectType.dotQualified(newClass.fullyQualifiedName))
     }
 
     for (method in oldClass.methods) {
         if (!method.isPublicApi) continue
-        val newMethods = newClass?.methods ?: listOf<ApiClass.Method>()
+        val newMethods = newClass?.methods ?: listOf<ClassApi.Method>()
         val bodyNeeded = method.static || method !in newMethods || method.isConstructor
         if (oldClass.isBaseclass && !bodyNeeded) continue
         addMethod(
@@ -115,8 +92,8 @@ private fun JavaGeneratedClass.buildBridgeClass(oldClass: ApiClass, newClass: Ap
 }
 
 private fun JavaGeneratedMethod.generateMethodBody(
-    newClass: ApiClass?,
-    oldMethod: ApiClass.Method
+    newClass: ClassApi?,
+    oldMethod: ClassApi.Method
 ) {
     val newMethod = newClass?.methods?.find { it.name == oldMethod.name }
     if (newMethod != null) {
