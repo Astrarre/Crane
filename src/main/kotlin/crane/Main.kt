@@ -37,7 +37,8 @@ private fun buildApiBridge(old: ClassApi, new: ClassApi?, destination: Path) {
         old.className,
         destination,
         isInterface = old.isInterface,
-        isAbstract = old.isBaseclass
+        isAbstract = old.isBaseclass,
+        visibility = Visibility.Public
     ) {
         buildBridgeClass(old, new)
     }
