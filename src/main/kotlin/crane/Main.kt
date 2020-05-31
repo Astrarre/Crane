@@ -1,10 +1,7 @@
 package crane
 
 import api.*
-import codegeneration.JavaCodeGenerator
-import codegeneration.JavaGeneratedClass
-import codegeneration.JavaGeneratedMethod
-import codegeneration.Visibility
+import codegeneration.*
 import descriptor.ObjectType
 import descriptor.ReturnDescriptor
 import exists
@@ -56,18 +53,28 @@ private fun JavaGeneratedClass.buildBridgeClass(oldClass: ClassApi, newClass: Cl
         val newMethods = newClass?.methods ?: listOf<ClassApi.Method>()
         val bodyNeeded = method.static || method !in newMethods || method.isConstructor
         if (oldClass.isBaseclass && !bodyNeeded) continue
-        addMethod(
-            name = method.name,
-            static = method.static,
-            final = false,
-            abstract = !bodyNeeded,
-            visibility = Visibility.Public,
-            returnType = if (method.isConstructor) null else method.descriptor.returnDescriptor,
-            parameters = method.parameterNames.zip(method.descriptor.parameterDescriptors)
-                .map { (name, desc) -> name to desc }
-        ) {
+
+        val body: JavaGeneratedMethod.() -> Unit = {
             if (bodyNeeded) generateMethodBody(newClass, method)
             if (newMethods.none { it.name == method.name }) addComment("TODO")
+        }
+
+        val visibility = Visibility.Public
+        val parameters = method.parameterNames.zip(method.descriptor.parameterDescriptors)
+            .map { (name, desc) -> name to desc }
+        if (method.isConstructor) {
+            addConstructor(visibility, parameters, body)
+        } else {
+            addMethod(
+                name = method.name,
+                static = method.static,
+                final = false,
+                abstract = !bodyNeeded,
+                visibility = visibility,
+                returnType = if (method.isConstructor) null else method.descriptor.returnDescriptor,
+                parameters = parameters,
+                body = body
+            )
         }
     }
 
@@ -83,8 +90,10 @@ private fun JavaGeneratedClass.buildBridgeClass(oldClass: ClassApi, newClass: Cl
             type = field.descriptor
         ) {
             if (newClass != null) setInitializer(
-                "\$T.${field.name}",
-                ObjectType.dotQualified(newClass.fullyQualifiedName)
+                Expression.Value.Field(
+                    owner = Expression.Class(ObjectType.dotQualified(newClass.fullyQualifiedName)),
+                    name = field.name
+                )
             )
         }
 
@@ -97,18 +106,22 @@ private fun JavaGeneratedMethod.generateMethodBody(
 ) {
     val newMethod = newClass?.methods?.find { it.name == oldMethod.name }
     if (newMethod != null) {
-        val newFunctionName = if (oldMethod.isConstructor) "" else oldMethod.name
-        val call = "$newFunctionName(${oldMethod.parameterNames.joinToString(", ")})"
-        val returnCall = if (oldMethod.descriptor.returnDescriptor == ReturnDescriptor.Void) ""
-        else "return"
+        val newFunctionName = oldMethod.name
+        val returnCall = oldMethod.descriptor.returnDescriptor != ReturnDescriptor.Void
 
+        val newClassType = ObjectType.dotQualified(newClass.fullyQualifiedName)
         val receiver = when {
-            oldMethod.static -> "\$T."
-            oldMethod.isConstructor -> "super"
-            newClass.isBaseclass -> "super."
-            else -> "((\$T)this)."
+            oldMethod.static -> Expression.Class(newClassType)
+            newClass.isBaseclass -> Expression.Super
+            else -> Expression.Value.This.castTo(newClassType)
         }
-        addStatement("$returnCall $receiver$call", ObjectType.dotQualified(newClass.fullyQualifiedName))
+
+        val parameters = oldMethod.parameterNames.map { Expression.Value.Variable(it) }
+        if (oldMethod.isConstructor) {
+            addSelfConstructorCall(SelfConstructorType.Super, parameters)
+        } else {
+            addFunctionCall(receiver, newFunctionName, parameters, returnCall)
+        }
     }
 
 }
